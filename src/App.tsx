@@ -112,10 +112,16 @@ function App() {
         bassEnvelope.triggerAttack(time); // 触发发声
       },
       [
-        ["0:0", "A1"], // 格式 ["小节:拍:16分音符", "音名"]
+        // 第 1 小节
+        ["0:0", "A1"], 
         ["0:2", "G1"],
         ["0:2:2", "C2"],
         ["0:3:2", "A1"],
+        // 第 2 小节 (新加的戏)
+        ["1:0", "F1"],
+        ["1:2", "E1"],
+        ["1:2:2", "G1"], 
+        ["1:3:2", "C2"],
       ],
     ).start(0);
 
@@ -159,7 +165,12 @@ function App() {
         kickEnvelope.triggerAttack(time); // 触发音量包络
         kickSnapEnv.triggerAttack(time); // 触发频率包络
       },
-      ["0", "0:0:3", "0:2:0", "0:3:1"],
+      [
+        // 第 1 小节
+        "0:0", "0:0:3", "0:2:0", "0:3:1", 
+        // 第 2 小节 (加点切分音)
+        "1:0", "1:1:2", "1:2", "1:3" 
+      ],
     ).start(0);
 
     // --- 乐器 6: SNARE (军鼓) ---
@@ -222,7 +233,7 @@ function App() {
     // --- Transport (时间轴) 设置 ---
     // Tone.js 的核心计时器
     Tone.getTransport().loopStart = 0;
-    Tone.getTransport().loopEnd = "1:0"; // 循环长度：1小节 (4拍)
+    Tone.getTransport().loopEnd = "2:0"; // 循环长度：2小节 (8拍)
     Tone.getTransport().loop = true; // 开启循环播放
 
     // 将包络对象保存到 ref 中，以便在 p5.js 的 draw 循环中访问它们的值进行可视化
