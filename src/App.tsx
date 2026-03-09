@@ -179,12 +179,21 @@ function App() {
 
     // --- Hihat 文件夹 ---
     const hihatParams = {
+      openEnabled: true, // openHiHat 是否启用
       openVolume: -10, // openHiHat 初始音量
       openDecay: 0.3, // openHiHat 包络衰减
+      closedEnabled: true, // closedHiHat 是否启用
       closedVolume: -10, // closedHiHat 初始音量
       closedDecay: 0.15, // closedHiHat 包络衰减
     };
     const hihatFolder = gui.addFolder("Hihat");
+    hihatFolder
+      .add(hihatParams, "openEnabled")
+      .name("Open Enabled")
+      .onChange((v: boolean) => {
+        // volume.value = -Infinity 等同于静音；恢复时读取滑条当前值，GUI 显示不变
+        openHiHat.volume.value = v ? hihatParams.openVolume : -Infinity;
+      });
     hihatFolder
       .add(hihatParams, "openVolume", -40, 0, 0.1)
       .name("Open Volume (dB)")
@@ -196,6 +205,12 @@ function App() {
       .name("Open Decay (s)")
       .onChange((v: number) => {
         openHiHat.envelope.decay = v;
+      });
+    hihatFolder
+      .add(hihatParams, "closedEnabled")
+      .name("Closed Enabled")
+      .onChange((v: boolean) => {
+        closedHiHat.volume.value = v ? hihatParams.closedVolume : -Infinity;
       });
     hihatFolder
       .add(hihatParams, "closedVolume", -40, 0, 0.1)
@@ -212,12 +227,20 @@ function App() {
 
     // --- Bass 文件夹 ---
     const bassParams = {
+      enabled: true, // bass 是否启用
       volume: 0, // bass PulseOscillator 初始音量
       filterFreq: 600, // bassFilter 截止频率
       filterQ: 8, // bassFilter 共振
-      decay: 0.2, // bassEnvelope 衰减
+      decay: 1, // bassEnvelope 衰减
     };
     const bassFolder = gui.addFolder("Bass");
+    bassFolder
+      .add(bassParams, "enabled")
+      .name("Enabled")
+      .onChange((v: boolean) => {
+        // bass 是振荡器源头，静音它即可静音整条信号链
+        bass.mute = !v;
+      });
     bassFolder
       .add(bassParams, "volume", -40, 0, 0.1)
       .name("Volume (dB)")
@@ -245,10 +268,17 @@ function App() {
 
     // --- Bleep 文件夹 ---
     const bleepParams = {
+      enabled: true, // bleep 是否启用
       volume: 0, // bleep Oscillator 初始音量
       decay: 0.4, // bleepEnvelope 衰减
     };
     const bleepFolder = gui.addFolder("Bleep");
+    bleepFolder
+      .add(bleepParams, "enabled")
+      .name("Enabled")
+      .onChange((v: boolean) => {
+        bleep.mute = !v;
+      });
     bleepFolder
       .add(bleepParams, "volume", -40, 0, 0.1)
       .name("Volume (dB)")
@@ -264,11 +294,18 @@ function App() {
 
     // --- Kick 文件夹 ---
     const kickParams = {
+      enabled: true, // kick 是否启用
       volume: 0, // kick Oscillator 初始音量
       decay: 0.2, // kickEnvelope 衰减
       octaves: 2.7, // kickSnapEnv 音高滑落范围（八度数）
     };
     const kickFolder = gui.addFolder("Kick");
+    kickFolder
+      .add(kickParams, "enabled")
+      .name("Enabled")
+      .onChange((v: boolean) => {
+        kick.mute = !v;
+      });
     kickFolder
       .add(kickParams, "volume", -40, 0, 0.1)
       .name("Volume (dB)")
@@ -308,7 +345,6 @@ function App() {
       // p5.draw: 动画循环，默认每秒 60 帧
       p.draw = () => {
         p.background(255); // 每帧清空背景 (白色)
-        p.stroke(0); // 设置描边颜色 (黑色)
 
         // --- 可视化 1: Kick Wave (底鼓波形) ---
         // 遍历画布宽度，绘制正弦波
@@ -376,7 +412,6 @@ function App() {
       bleepEnvelope.dispose();
       bleep.dispose();
       bleepLoop.dispose();
-      // 注意：原代码有重复 dispose，这里已修正
       kickEnvelope.dispose();
       kick.dispose();
       kickSnapEnv.dispose();
@@ -387,7 +422,6 @@ function App() {
   // 处理播放/停止点击事件
   const togglePlay = async () => {
     if (!isPlaying) {
-      // 关键：浏览器策略要求音频上下文必须在用户手势（点击）中启动
       await Tone.start();
       Tone.getTransport().start(); // 启动时间轴，开始播放音乐
       setIsPlaying(true);
@@ -410,7 +444,6 @@ function App() {
       <div className="relative z-10 flex top-10 left-10 pointer-events-none">
         <button
           onClick={togglePlay}
-          // pointer-events-auto 恢复按钮的点击能力
           className={`px-6 py-3 rounded-full text-white font-bold text-lg transition-colors pointer-events-auto shadow-lg ${
             isPlaying
               ? "bg-red-500 hover:bg-red-600"
