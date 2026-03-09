@@ -87,7 +87,7 @@ function App() {
     // AmplitudeEnvelope: 振幅包络，独立控制音量变化
     const bassEnvelope = new Tone.AmplitudeEnvelope({
       attack: 0.01,
-      decay: 0.2,
+      decay: 1,
       sustain: 0,
     }).toDestination();
 
@@ -162,6 +162,63 @@ function App() {
       ["0", "0:0:3", "0:2:0", "0:3:1"],
     ).start(0);
 
+    // --- 乐器 6: SNARE (军鼓) ---
+    // 军鼓通常由两部分组成：打击声（Tone）和沙带声（Noise）
+    // 这里我们用 NoiseSynth 模拟沙带声，并加一个滤波器
+    const snareFilter = new Tone.Filter({
+        frequency: 3000,
+        type: "highpass",
+        Q: 1
+    }).toDestination();
+
+    const snare = new Tone.NoiseSynth({
+        volume: 0,
+        noise: {
+            type: "pink", // 粉红噪声比白噪声更柔和
+        },
+        envelope: {
+            attack: 0.001,
+            decay: 1,
+            sustain: 0
+        }
+    }).connect(snareFilter);
+
+    const snarePart = new Tone.Part(
+        (time) => {
+            snare.triggerAttack(time);
+        },
+        ["0:1", "0:3"] // 在第2拍和第4拍触发 (典型的摇滚/流行节奏)
+    ).start(0);
+
+    // --- 乐器 8: TOM (嗵鼓) ---
+    // MembraneSynth 专门用于模拟鼓皮振动
+    const tom = new Tone.MembraneSynth({
+        volume: 0,
+        pitchDecay: 0.05,
+        octaves: 4,
+        oscillator: {
+            type: "sine"
+        },
+        envelope: {
+            attack: 0.001,
+            decay: 2,
+            sustain: 0.01,
+            release: 1.4,
+            attackCurve: "exponential"
+        }
+    }).toDestination();
+
+    const tomPart = new Tone.Part(
+        (time, note) => {
+            tom.triggerAttack(note, time);
+        },
+        [
+            ["0:3:2", "A2"], 
+            ["0:3:3", "G2"]
+        ]
+    ).start(0);
+
+
     // --- Transport (时间轴) 设置 ---
     // Tone.js 的核心计时器
     Tone.getTransport().loopStart = 0;
@@ -173,6 +230,8 @@ function App() {
       kickEnvelope,
       bassEnvelope,
       bleepEnvelope,
+      snare, // Snare 本身有 envelope 属性: snare.envelope.value
+      tom, // Tom 也有 envelope
     };
 
     // 3.5. 绑定 GUI 控制面板到 Tone.js 乐器参数
@@ -325,6 +384,28 @@ function App() {
         kickSnapEnv.octaves = v;
       });
 
+    // --- Snare 文件夹 ---
+    const snareParams = {
+        enabled: true,
+        volume: 0,
+        decay: 1
+    };
+    const snareFolder = gui.addFolder("Snare");
+    snareFolder.add(snareParams, "enabled").onChange((v: boolean) => snare.volume.value = v ? snareParams.volume : -Infinity);
+    snareFolder.add(snareParams, "volume", -40, 0).onChange((v: number) => snare.volume.value = v);
+    snareFolder.add(snareParams, "decay", 0.05, 2).onChange((v: number) => snare.envelope.decay = v);
+
+    // --- Tom 文件夹 ---
+    const tomParams = {
+        enabled: true,
+        volume: 0,
+        decay: 2
+    };
+    const tomFolder = gui.addFolder("Tom");
+    tomFolder.add(tomParams, "enabled").onChange((v: boolean) => tom.volume.value = v ? tomParams.volume : -Infinity);
+    tomFolder.add(tomParams, "volume", -40, 0).onChange((v: number) => tom.volume.value = v);
+    tomFolder.add(tomParams, "decay", 0.1, 4).onChange((v: number) => tom.envelope.decay = v);
+
     // 4. 初始化 p5.js 绘图 (Sketch)
     const sketch = (p: p5) => {
       let phase = 0; // 相位变量，用于让波形动起来
@@ -377,6 +458,71 @@ function App() {
         const beepSize = p.height * bleepEnvelope.value;
         p.stroke("green");
         p.rect(beepX, beepY, beepSize, beepSize);
+
+        // --- 可视化 4: Snare Star (军鼓星芒) ---
+         // 使用多角星形模拟军鼓的爆发力
+         if (snare.envelope.value > 0.01) {
+             p.push();
+             // 使用 Noise 让位置随机游走，而不是固定在中心
+             // 加偏移量 1000 避免和 Bass/Bleep 轨迹重叠
+             const snareX = p.noise(p.millis() / 300 + 1000) * p.width;
+             const snareY = p.noise(phase / 30 + 1000) * p.height;
+             p.translate(snareX, snareY);
+             
+             p.rotate(phase * 0.2); // 快速旋转
+             p.noFill();
+             p.stroke(255, 215, 0); // 金色
+             p.strokeWeight(3);
+             
+             const radius = snare.envelope.value * 250;
+             const points = 12; // 12角星
+             
+             p.beginShape();
+             for (let i = 0; i < points * 2; i++) {
+                 const angle = (Math.PI * i) / points;
+                 // 奇数点半径大，偶数点半径小，形成尖刺
+                 const r = i % 2 === 0 ? radius : radius * 0.4;
+                 const x = Math.cos(angle) * r;
+                 const y = Math.sin(angle) * r;
+                 p.vertex(x, y);
+             }
+             p.endShape(p.CLOSE);
+             p.pop();
+         }
+ 
+         // --- 可视化 5: Tom Hexagons (嗵鼓六边形) ---
+         // 使用同心六边形模拟嗵鼓的层层递进
+         if (tom.envelope.value > 0.01) {
+              p.push();
+              // 使用 Noise 让位置随机游走
+              // 加偏移量 2000 确保轨迹独特
+              const tomX = p.noise(p.millis() / 500 + 2000) * p.width;
+              const tomY = p.noise(phase / 50 + 2000) * p.height;
+              p.translate(tomX, tomY);
+
+              p.noFill();
+              p.stroke("cyan"); // 青色
+              p.strokeWeight(4);
+              
+              const baseSize = tom.envelope.value * 300;
+              
+              // 绘制3个同心六边形
+              for(let k = 0; k < 3; k++) {
+                  const currentSize = baseSize * (1 - k * 0.25);
+                  if (currentSize > 0) {
+                      p.beginShape();
+                      for (let i = 0; i < 6; i++) {
+                         // 加上 phase 让六边形缓慢旋转
+                         const angle = (Math.PI / 3) * i + (phase * 0.01);
+                         const x = Math.cos(angle) * currentSize;
+                         const y = Math.sin(angle) * currentSize;
+                         p.vertex(x, y);
+                      }
+                      p.endShape(p.CLOSE);
+                  }
+              }
+              p.pop();
+         }
       };
     };
 
@@ -416,6 +562,11 @@ function App() {
       kick.dispose();
       kickSnapEnv.dispose();
       kickPart.dispose();
+      snare.dispose();
+      snareFilter.dispose();
+      snarePart.dispose();
+      tom.dispose();
+      tomPart.dispose();
     };
   }, []);
 
