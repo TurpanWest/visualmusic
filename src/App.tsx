@@ -105,24 +105,60 @@ function App() {
     );
     bass.start(); // 启动振荡器（此时无声，因为包络默认为关闭，需 triggerAttack 触发）
 
+    // --- Euclidean Rhythm + Random Walk 生成器 ---
+    // 结合了数学的律动感（欧几里得节奏）和自然的旋律感（随机游走）
+    const generateEuclideanBass = () => {
+      // 1. 定义音阶 (C Minor Pentatonic)
+      const scale = ["C2", "Eb2", "F2", "G2", "Bb2", "C3", "Eb3", "F3"];
+      
+      // 2. 欧几里得参数
+      // steps: 总步数 (16 = 1小节的16分音符)
+      // pulses: 打击数 (比如 7/16 是非常经典的非洲/巴西节奏，5/16 是 Bossa Nova)
+      const steps = 16; 
+      const pulses = 9; // 你可以尝试改成 5, 9, 11 等
+      
+      const events = [];
+      let currentIndex = 2; // 音高游走指针
+      
+      // 生成 4 个小节
+      for (let bar = 0; bar < 4; bar++) {
+        for (let s = 0; s < steps; s++) {
+          // --- 核心算法 1: Euclidean Rhythm (节奏) ---
+          // 公式：(step * pulses) % steps < pulses
+          // 这个简单的公式能生成极其均匀且充满律动的节奏分布
+          const isHit = (s * pulses) % steps < pulses;
+          
+          if (isHit) {
+            // --- 核心算法 2: Random Walk (旋律) ---
+            // 只有在“打”的时候，我们才游走到下一个音
+            const r = Math.random();
+            if (r < 0.33) currentIndex--; 
+            else if (r < 0.66) currentIndex++;
+            
+            // 边界检查
+            if (currentIndex < 0) currentIndex = 0;
+            if (currentIndex >= scale.length) currentIndex = scale.length - 1;
+            
+            // 计算时间：bar:beat:sixteenth
+            // s 是 0-15 (16分音符)
+            const beat = Math.floor(s / 4);
+            const sixteenth = s % 4;
+            const time = `${bar}:${beat}:${sixteenth}`;
+            
+            events.push([time, scale[currentIndex]]);
+          }
+        }
+      }
+      return events;
+    };
+
     // 贝斯旋律序列：包含时间和音高
     const bassPart = new Tone.Part(
       (time, note) => {
         bass.frequency.setValueAtTime(note, time); // 设置音高
         bassEnvelope.triggerAttack(time); // 触发发声
       },
-      [
-        // 第 1 小节
-        ["0:0", "A1"], 
-        ["0:2", "G1"],
-        ["0:2:2", "C2"],
-        ["0:3:2", "A1"],
-        // 第 2 小节 (新加的戏)
-        ["1:0", "F1"],
-        ["1:2", "E1"],
-        ["1:2:2", "G1"], 
-        ["1:3:2", "C2"],
-      ],
+      generateEuclideanBass() // <--- 切换到欧几里得节奏生成器
     ).start(0);
 
     // --- 乐器 4: BLEEP (高音哔哔声) ---
@@ -233,7 +269,7 @@ function App() {
     // --- Transport (时间轴) 设置 ---
     // Tone.js 的核心计时器
     Tone.getTransport().loopStart = 0;
-    Tone.getTransport().loopEnd = "2:0"; // 循环长度：2小节 (8拍)
+    Tone.getTransport().loopEnd = "4:0"; // 循环长度：4小节 (让Random Walk走久一点)
     Tone.getTransport().loop = true; // 开启循环播放
 
     // 将包络对象保存到 ref 中，以便在 p5.js 的 draw 循环中访问它们的值进行可视化
