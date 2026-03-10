@@ -118,6 +118,7 @@ function App() {
 
     const bassFilter = new Tone.Filter({ frequency: 800, Q: 3 }).connect(bassEnvelope);
     const bass = new Tone.Oscillator("C2", "sawtooth").connect(bassFilter).start();
+    bass.volume.value = -5; // 初始 Volume
 
     // 让 Bass 专挑 Kick 不响的缝隙打 (切分音)
     const generateGroovyBass = () => {
@@ -154,9 +155,9 @@ function App() {
     const melodyFilter = new Tone.Filter({ frequency: 3000, type: "lowpass", Q: 2 }).connect(reverb); // 连入混响！
     
     const melody = new Tone.Synth({
-        volume: -12,
-        oscillator: { type: "fatsawtooth", count: 3, spread: 40 },
-        envelope: { attack: 0.05, decay: 0.6, sustain: 0.2, release: 1 }
+        volume: 0,
+        oscillator: { type: "fatsawtooth", count: 7, spread: 40 }, // count 增加到 7
+        envelope: { attack: 0.05, decay: 0.6, sustain: 0.53, release: 2.5 }
     }).connect(melodyFilter);
 
     // 使用同调性的 C Minor Pentatonic，稍微提高八度
@@ -175,7 +176,13 @@ function App() {
     Tone.getTransport().loop = true;
 
     // 保存引用供可视化使用
-    toneObjects.current = { kickEnvelope, bassEnvelope, snare, tom, melody };
+    toneObjects.current = { 
+        kickEnvelope, kickEnabled: true,
+        bassEnvelope, bassEnabled: true,
+        snare, snareEnabled: true,
+        tom, tomEnabled: true,
+        melody, melodyEnabled: true
+    };
 
     // 收集所有需要清理的 Tone.js 对象
     const disposables = [
@@ -214,7 +221,7 @@ function App() {
     // Kick
     const kickParams = { enabled: true, volume: 0, decay: 0.2, punchDecay: 0.1, punchOctaves: 4 };
     const kickFolder = drumsFolder.addFolder("Kick");
-    kickFolder.add(kickParams, "enabled").onChange((v: boolean) => kick.mute = !v);
+    kickFolder.add(kickParams, "enabled").onChange((v: boolean) => { kick.mute = !v; toneObjects.current.kickEnabled = v; });
     kickFolder.add(kickParams, "volume", -40, 0).onChange((v: number) => kick.volume.value = v);
     kickFolder.add(kickParams, "decay", 0.01, 1).onChange((v: number) => kickEnvelope.decay = v);
     kickFolder.add(kickParams, "punchDecay", 0.01, 0.5).onChange((v: number) => kickSnapEnv.decay = v);
@@ -223,7 +230,7 @@ function App() {
     // Snare
     const snareParams = { enabled: true, volume: -5, decay: 0.2, filterFreq: 2000 };
     const snareFolder = drumsFolder.addFolder("Snare");
-    snareFolder.add(snareParams, "enabled").onChange((v: boolean) => snare.volume.value = v ? snareParams.volume : -Infinity);
+    snareFolder.add(snareParams, "enabled").onChange((v: boolean) => { snare.volume.value = v ? snareParams.volume : -Infinity; toneObjects.current.snareEnabled = v; });
     snareFolder.add(snareParams, "volume", -40, 0).onChange((v: number) => snare.volume.value = v);
     snareFolder.add(snareParams, "decay", 0.01, 1).onChange((v: number) => snare.envelope.decay = v);
     snareFolder.add(snareParams, "filterFreq", 100, 10000).onChange((v: number) => snareFilter.frequency.value = v);
@@ -241,7 +248,7 @@ function App() {
     // Tom
     const tomParams = { enabled: true, volume: -5, decay: 0.4, pitchDecay: 0.05 };
     const tomFolder = drumsFolder.addFolder("Tom");
-    tomFolder.add(tomParams, "enabled").onChange((v: boolean) => tom.volume.value = v ? tomParams.volume : -Infinity);
+    tomFolder.add(tomParams, "enabled").onChange((v: boolean) => { tom.volume.value = v ? tomParams.volume : -Infinity; toneObjects.current.tomEnabled = v; });
     tomFolder.add(tomParams, "volume", -40, 0).onChange((v: number) => tom.volume.value = v);
     tomFolder.add(tomParams, "decay", 0.01, 2).onChange((v: number) => tom.envelope.decay = v);
     tomFolder.add(tomParams, "pitchDecay", 0.001, 0.5).onChange((v: number) => tom.pitchDecay = v);
@@ -250,9 +257,9 @@ function App() {
     const melodyGroupFolder = gui.addFolder("Melody Group");
 
     // Bass
-    const bassParams = { enabled: true, volume: 0, filterFreq: 800, filterQ: 3, decay: 0.66 };
+    const bassParams = { enabled: true, volume: -5, filterFreq: 800, filterQ: 3, decay: 0.66 };
     const bassFolder = melodyGroupFolder.addFolder("Bass");
-    bassFolder.add(bassParams, "enabled").onChange((v:boolean) => bass.mute = !v);
+    bassFolder.add(bassParams, "enabled").onChange((v:boolean) => { bass.mute = !v; toneObjects.current.bassEnabled = v; });
     bassFolder.add(bassParams, "volume", -40, 0).onChange((v:number) => bass.volume.value = v);
     bassFolder.add(bassParams, "filterFreq", 80, 4000).onChange((v:number) => bassFilter.frequency.value = v);
     bassFolder.add(bassParams, "filterQ", 0, 20).onChange((v: number) => bassFilter.Q.value = v);
@@ -262,16 +269,16 @@ function App() {
 
     // Main Melody
     const melodyParams = { 
-        enabled: true, volume: -12, 
-        spread: 40, count: 3, 
+        enabled: true, volume: 0, 
+        spread: 40, count: 7, 
         filterFreq: 3000, filterQ: 2,
-        attack: 0.05, decay: 0.6, sustain: 0.2, release: 1
+        attack: 0.05, decay: 0.6, sustain: 0.53, release: 2.5
     };
     const melodyFolder = melodyGroupFolder.addFolder("Melody (FatOscillator)");
-    melodyFolder.add(melodyParams, "enabled").onChange((v:boolean) => melody.volume.value = v ? melodyParams.volume : -Infinity);
+    melodyFolder.add(melodyParams, "enabled").onChange((v:boolean) => { melody.volume.value = v ? melodyParams.volume : -Infinity; toneObjects.current.melodyEnabled = v; });
     melodyFolder.add(melodyParams, "volume", -40, 0).onChange((v:number) => melody.volume.value = v);
     melodyFolder.add(melodyParams, "spread", 0, 100).onChange((v: number) => (melody.oscillator as unknown as Tone.FatOscillator).spread = v);
-    melodyFolder.add(melodyParams, "count", 1, 5, 1).onChange((v: number) => (melody.oscillator as unknown as Tone.FatOscillator).count = v);
+    melodyFolder.add(melodyParams, "count", 1, 9, 1).onChange((v: number) => (melody.oscillator as unknown as Tone.FatOscillator).count = v);
     melodyFolder.add(melodyParams, "filterFreq", 100, 10000).onChange((v: number) => melodyFilter.frequency.value = v);
     melodyFolder.add(melodyParams, "filterQ", 0, 20).onChange((v: number) => melodyFilter.Q.value = v);
     melodyFolder.add(melodyParams, "attack", 0, 2).onChange((v: number) => melody.envelope.attack = v);
@@ -284,88 +291,143 @@ function App() {
     // ==========================================
     const sketch = (p: p5) => {
       let phase = 0;
-      p.setup = () => { p.createCanvas(p.windowWidth, p.windowHeight); p.fill(0); p.strokeWeight(1); p.rectMode(p.CENTER); };
+      // Kick 冲击波数组
+      const shockwaves: { size: number; opacity: number }[] = [];
+
+      p.setup = () => { 
+        p.createCanvas(p.windowWidth, p.windowHeight); 
+        p.colorMode(p.HSB, 360, 100, 100, 100); // 切换 HSB 模式
+        p.rectMode(p.CENTER); 
+      };
       p.windowResized = () => p.resizeCanvas(p.windowWidth, p.windowHeight);
 
       p.draw = () => {
-        p.background(27);
-        const { kickEnvelope, bassEnvelope, snare, tom, melody } = toneObjects.current;
+        const { kickEnvelope, kickEnabled, bassEnvelope, bassEnabled, snare, snareEnabled, tom, tomEnabled, melody, melodyEnabled } = toneObjects.current;
 
-        // Kick Wave
-        if(kickEnvelope) {
-            for (let i = 0; i < p.width; i++) {
-            const kickValue = kickEnvelope.value * 200;
-            const yDot = Math.sin(i / 60 + phase) * kickValue;
-            p.stroke("white");
-            p.point(i, p.height - 150 + yDot);
-            }
-        }
+        // --- 1. 全局氛围 & 背景 (Global Atmosphere) ---
+        // 背景始终为深灰/黑色，带透明度拖尾，不再闪烁
+        p.background(20, 30); // 纯深色背景
+
+        // 将原点移至屏幕中心，构建星系
+        p.translate(p.width / 2, p.height / 2);
         phase += 1;
 
-        // Bass Circle
-        if(bassEnvelope) {
-            const bassRadius = p.height * bassEnvelope.value * 1.5;
-            p.stroke("red");
-            const bassX = p.noise(p.millis() / 1000) * p.width;
-            const bassY = p.noise(phase / 100) * p.height;
-            p.ellipse(bassX, bassY, bassRadius, bassRadius);
+        // --- 2. Kick Shockwaves (同心圆冲击波) ---
+        if (kickEnvelope && kickEnabled && kickEnvelope.value > 0.1 && p.frameCount % 5 === 0) { // 限制产生频率
+            shockwaves.push({ size: 50, opacity: 100 });
+        }
+        
+        p.noFill();
+        p.strokeWeight(2);
+        for (let i = shockwaves.length - 1; i >= 0; i--) {
+            const wave = shockwaves[i];
+            wave.size += 15; // 扩散速度
+            wave.opacity -= 2; // 衰减速度
+            
+            if (wave.opacity <= 0) {
+                shockwaves.splice(i, 1);
+            } else {
+                p.stroke(0, 0, 100, wave.opacity); // 白色波纹
+                p.ellipse(0, 0, wave.size, wave.size);
+            }
         }
 
+        // --- 3. Bass Core (恒星/心脏) ---
+        if(bassEnvelope && bassEnabled) {
+            const bassVal = bassEnvelope.value; 
+            const baseRadius = p.height * 0.15 + bassVal * 150;
+            
+            // Bass 核心颜色: 降低饱和度的暗红色
+            p.stroke(350, 60, 80); 
+            p.strokeWeight(3);
+            p.noFill();  
+            
+            p.beginShape();
+            for (let a = 0; a < p.TWO_PI; a += 0.1) {
+                // 有机蠕动
+                const xoff = Math.cos(a) + phase * 0.02;
+                const yoff = Math.sin(a) + phase * 0.02;
+                const r = baseRadius + p.map(p.noise(xoff, yoff, phase * 0.05), 0, 1, -30, 30) * (1 + bassVal * 3); 
+                const x = r * Math.cos(a);
+                const y = r * Math.sin(a);
+                p.vertex(x, y);
+            }
+            p.endShape(p.CLOSE);
+        }
 
-
-        // Snare Star
-        if (snare && snare.envelope.value > 0.01) {
-             p.push();
-             const snareX = p.noise(p.millis() / 300 + 1000) * p.width;
-             const snareY = p.noise(phase / 30 + 1000) * p.height;
-             p.translate(snareX, snareY);
-             p.rotate(phase * 0.2);
-             p.noFill(); p.stroke(255, 215, 0); p.strokeWeight(3);
-             const radius = snare.envelope.value * 250;
+        // --- 4. Melody Orbit (土星环) ---
+        if (melody && melodyEnabled && melody.envelope) {
+             const melodyVal = melody.envelope.value;
+             p.noFill(); 
+             p.stroke(280, 80, 100); // 紫色
+             p.strokeWeight(2);
+             
+             const orbitRadius = p.height * 0.35;
              p.beginShape();
-             for (let i = 0; i < 24; i++) {
+             for (let a = 0; a <= p.TWO_PI; a += 0.05) {
+                 // 环绕圆周的波形
+                 // 映射角度到线性 noise
+                 const noiseVal = (p.noise(a * 5, phase * 0.05) - 0.5) * melodyVal * 300;
+                 const r = orbitRadius + noiseVal;
+                 const x = r * Math.cos(a);
+                 const y = r * Math.sin(a);
+                 p.vertex(x, y);
+             }
+             p.endShape(p.CLOSE);
+        }
+
+        // --- 5. Snare & Tom Satellites (公转行星) ---
+        
+        // Snare: 内圈快速公转的星星
+        if (snare && snareEnabled && snare.envelope.value > 0.01) {
+             p.push();
+             const snareDist = p.height * 0.25; // 轨道距离
+             const snareAngle = phase * 0.05; // 公转速度
+             p.rotate(snareAngle);
+             p.translate(snareDist, 0); // 移动到轨道位置
+             
+             // 自转
+             p.rotate(phase * 0.1); 
+             
+             p.noFill(); 
+             p.stroke(50, 100, 100); // 金黄色
+             p.strokeWeight(3);
+             
+             const radius = snare.envelope.value * 200;
+             p.beginShape();
+             for (let i = 0; i < 16; i++) { // 8角星
                  const r = i % 2 === 0 ? radius : radius * 0.4;
-                 p.vertex(Math.cos(Math.PI * i / 12) * r, Math.sin(Math.PI * i / 12) * r);
+                 p.vertex(Math.cos(Math.PI * i / 8) * r, Math.sin(Math.PI * i / 8) * r);
              }
              p.endShape(p.CLOSE);
              p.pop();
          }
  
-         // Tom Hexagons
-         if (tom && tom.envelope.value > 0.01) {
+         // Tom: 外圈缓慢公转的六边形
+         if (tom && tomEnabled && tom.envelope.value > 0.01) {
               p.push();
-              const tomX = p.noise(p.millis() / 500 + 2000) * p.width;
-              const tomY = p.noise(phase / 50 + 2000) * p.height;
-              p.translate(tomX, tomY);
-              p.noFill(); p.stroke("cyan"); p.strokeWeight(4);
-              const baseSize = tom.envelope.value * 300;
+              const tomDist = p.height * 0.45; // 更远的轨道
+              const tomAngle = -phase * 0.02; // 反向慢速公转
+              p.rotate(tomAngle);
+              p.translate(tomDist, 0);
+              
+              p.noFill(); 
+              p.stroke(180, 100, 100); // 青色
+              p.strokeWeight(4);
+              
+              const baseSize = tom.envelope.value * 250;
+              // 绘制同心六边形
               for(let k = 0; k < 3; k++) {
-                  const currentSize = baseSize * (1 - k * 0.25);
+                  const currentSize = baseSize * (1 - k * 0.3);
                   if (currentSize > 0) {
                       p.beginShape();
                       for (let i = 0; i < 6; i++) {
-                         p.vertex(Math.cos(Math.PI/3 * i + phase*0.01) * currentSize, Math.sin(Math.PI/3 * i + phase*0.01) * currentSize);
+                         p.vertex(Math.cos(Math.PI/3 * i) * currentSize, Math.sin(Math.PI/3 * i) * currentSize);
                       }
                       p.endShape(p.CLOSE);
                   }
               }
               p.pop();
-         }
-
-         // Melody Flow
-         if (melody && melody.envelope && melody.envelope.value > 0.01) {
-             p.push();
-             p.translate(0, p.height / 2);
-             p.noFill(); p.stroke("purple"); p.strokeWeight(2);
-             const melodyVal = melody.envelope.value * 200;
-             p.beginShape();
-             for (let i = 0; i < p.width; i+=10) {
-                 const yOffset = Math.sin(i * 0.05 + phase * 0.1) * melodyVal;
-                 const noiseVal = (p.noise(i * 0.01, phase * 0.05) - 0.5) * melodyVal * 2;
-                 p.vertex(i, yOffset + noiseVal);
-             }
-             p.endShape();
-             p.pop();
          }
       };
     };
