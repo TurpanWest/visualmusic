@@ -22,7 +22,7 @@ function App() {
     // ==========================================
     // 🎧 1. 全局设置 & 空间效果器 (Mix & FX)
     // ==========================================
-    Tone.getTransport().bpm.value = 125; // 设定标准 House/Techno 速度
+    Tone.getTransport().bpm.value = 90; // 设定标准 House/Techno 速度
 
     // 混响：让声音有在巨大空间里的感觉
     const reverb = new Tone.Reverb({
@@ -147,21 +147,7 @@ function App() {
       generateGroovyBass()
     ).start(0);
 
-    // --- BLEEP (哔哔声: 连接延迟效果器，做点缀) ---
-    const bleepEnvelope = new Tone.AmplitudeEnvelope({
-      attack: 0.005, decay: 0.1, sustain: 0,
-    }).connect(delay); // 连入延迟！
 
-    const bleep = new Tone.Oscillator("C5", "square").connect(bleepEnvelope).start();
-
-    // 偶尔发声 (Polyrhythm 效果)
-    const bleepPart = new Tone.Part(
-      (time) => {
-        const notes = ["C5", "Eb5", "G5"];
-        bleep.frequency.setValueAtTime(notes[Math.floor(Math.random() * notes.length)], time);
-        bleepEnvelope.triggerAttack(time);
-      },["0:2:2", "1:3:0", "2:1:2", "3:0:2"] // 精心挑选的切分位置
-    ).start(0);
 
 
     // --- MAIN MELODY (FatOscillator 史诗主音) ---
@@ -189,7 +175,7 @@ function App() {
     Tone.getTransport().loop = true;
 
     // 保存引用供可视化使用
-    toneObjects.current = { kickEnvelope, bassEnvelope, bleepEnvelope, snare, tom, melody };
+    toneObjects.current = { kickEnvelope, bassEnvelope, snare, tom, melody };
 
     // 收集所有需要清理的 Tone.js 对象
     const disposables = [
@@ -200,7 +186,6 @@ function App() {
         closedHiHat, closedHatLoop,
         tom, tomPart,
         bass, bassFilter, bassEnvelope, bassPart,
-        bleep, bleepEnvelope, bleepPart,
         melody, melodyFilter, melodyPart
     ];
 
@@ -210,7 +195,7 @@ function App() {
 
     // --- Global & FX ---
     const globalParams = { 
-        bpm: 125, 
+        bpm: 90, 
         reverbDecay: 4, reverbWet: 0.4,
         delayFeedback: 0.5, delayWet: 0.5,
         masterLowPass: 8000
@@ -273,12 +258,7 @@ function App() {
     bassFolder.add(bassParams, "filterQ", 0, 20).onChange((v: number) => bassFilter.Q.value = v);
     bassFolder.add(bassParams, "decay", 0.01, 1).onChange((v:number) => bassEnvelope.decay = v);
 
-    // Bleep
-    const bleepParams = { enabled: true, volume: 0, decay: 0.1 };
-    const bleepFolder = melodyGroupFolder.addFolder("Bleep");
-    bleepFolder.add(bleepParams, "enabled").onChange((v: boolean) => bleep.mute = !v);
-    bleepFolder.add(bleepParams, "volume", -40, 0).onChange((v: number) => bleep.volume.value = v);
-    bleepFolder.add(bleepParams, "decay", 0.01, 1).onChange((v: number) => bleepEnvelope.decay = v);
+
 
     // Main Melody
     const melodyParams = { 
@@ -309,7 +289,7 @@ function App() {
 
       p.draw = () => {
         p.background(27);
-        const { kickEnvelope, bassEnvelope, bleepEnvelope, snare, tom, melody } = toneObjects.current;
+        const { kickEnvelope, bassEnvelope, snare, tom, melody } = toneObjects.current;
 
         // Kick Wave
         if(kickEnvelope) {
@@ -331,14 +311,7 @@ function App() {
             p.ellipse(bassX, bassY, bassRadius, bassRadius);
         }
 
-        // Bleep Rect
-        if(bleepEnvelope) {
-            const beepX = p.noise(p.millis() / 500) * p.width;
-            const beepY = p.noise(phase / 50) * p.height;
-            const beepSize = p.height * bleepEnvelope.value * 1.5;
-            p.stroke("green");
-            p.rect(beepX, beepY, beepSize, beepSize);
-        }
+
 
         // Snare Star
         if (snare && snare.envelope.value > 0.01) {
