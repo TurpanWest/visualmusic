@@ -113,7 +113,7 @@ function App() {
 
     // --- BASS (贝斯: 弹跳感 Acid Bass) ---
     const bassEnvelope = new Tone.AmplitudeEnvelope({
-      attack: 0.001, decay: 0.15, sustain: 0, // 短促有力
+      attack: 0.001, decay: 0.66, sustain: 0, // 短促有力
     }).toDestination();
 
     const bassFilter = new Tone.Filter({ frequency: 800, Q: 3 }).connect(bassEnvelope);
@@ -265,7 +265,7 @@ function App() {
     const melodyGroupFolder = gui.addFolder("Melody Group");
 
     // Bass
-    const bassParams = { enabled: true, volume: 0, filterFreq: 800, filterQ: 3, decay: 0.15 };
+    const bassParams = { enabled: true, volume: 0, filterFreq: 800, filterQ: 3, decay: 0.66 };
     const bassFolder = melodyGroupFolder.addFolder("Bass");
     bassFolder.add(bassParams, "enabled").onChange((v:boolean) => bass.mute = !v);
     bassFolder.add(bassParams, "volume", -40, 0).onChange((v:number) => bass.volume.value = v);
