@@ -81,7 +81,7 @@ export function setupGUI(
   const rhodesFolder = melodyGroupFolder.addFolder("Rhodes (Electric Piano)");
   rhodesFolder.add(rhodesParams, "enabled"    ).onChange((v: boolean) => { rhodes.set({ volume: v ? rhodesParams.volume : -Infinity }); toneObjectsRef.current.rhodesEnabled = v; });
   rhodesFolder.add(rhodesParams, "volume",     -40, 0   ).onChange((v: number) => rhodes.set({ volume: v }));
-  rhodesFolder.add(rhodesParams, "chorusDepth",0,   1   ).name("Chorus Depth").onChange((v: number) => (rhodesChorus.depth as Tone.Signal<"normalRange">).value = v);
+  rhodesFolder.add(rhodesParams, "chorusDepth",0,   1   ).name("Chorus Depth").onChange((v: number) => (rhodesChorus.depth as unknown as Tone.Signal<"normalRange">).value = v);
   rhodesFolder.add(rhodesParams, "filterFreq", 500, 8000).name("Tone")        .onChange((v: number) => rhodesFilter.frequency.value = v);
 
   const arpParams = { enabled: true, volume: -18, filterFreq: 2200, filterQ: 1.5 };

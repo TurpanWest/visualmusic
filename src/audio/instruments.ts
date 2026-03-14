@@ -226,7 +226,8 @@ export function setupAudio(toneObjectsRef: { current: Record<string, unknown> })
   const padFilter = new Tone.Filter({ frequency: 1800, type: "lowpass", Q: 0.8 });
   const pad = new Tone.PolySynth(Tone.Synth, {
     volume: -22,
-    oscillator: { type: "fatsawtooth", count: 3, spread: 25 } as Tone.ToneOscillatorOptions,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    oscillator: { type: "fatsawtooth", count: 3, spread: 25 } as any,
     envelope: { attack: 0.9, decay: 1.2, sustain: 0.7, release: 3.5 },
   });
   pad.connect(padFilter);
