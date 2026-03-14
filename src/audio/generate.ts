@@ -206,8 +206,8 @@ export function generateMelody(): [string, string][] {
 
 /**
  * BPM with slight per-session variation — City Pop comfort zone.
- * Range: 84–96 BPM (avoids the exact-90 sameness).
+ * Range: 104–116 BPM (centered around 110).
  */
 export function getRandomBpm(): number {
-  return Math.round(84 + Math.random() * 12);
+  return Math.round(104 + Math.random() * 12);
 }

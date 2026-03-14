@@ -9,7 +9,7 @@ import CodePanel from "./components/CodePanel";
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [bpm, setBpm]            = useState(90);
+  const [bpm, setBpm]            = useState(110);
   const canvasRef    = useRef<HTMLDivElement>(null);
   const p5Instance   = useRef<p5 | null>(null);
   const guiRef       = useRef<GUI | null>(null);
