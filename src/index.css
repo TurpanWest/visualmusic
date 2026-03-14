@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -22,6 +27,9 @@ body {
   height: 100vh;
   overflow: hidden;
 }
+
+/* Hide scrollbar for CodePanel while keeping scroll functionality */
+.code-panel::-webkit-scrollbar { display: none; }
 
 #root {
   width: 100%;
