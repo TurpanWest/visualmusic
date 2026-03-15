@@ -17,37 +17,44 @@ function App() {
   const guiRef       = useRef<GUI | null>(null);
   const toneObjects  = useRef<Record<string, unknown>>({});
 
+  // Audio graph is built once and never rebuilt.
+  // Preset switching is handled by swapping activeLead.synth in handlePresetSelect.
   useEffect(() => {
     if (p5Instance.current) p5Instance.current.remove();
     if (guiRef.current)     guiRef.current.destroy();
 
-    // Stop any in-flight transport before re-building the audio graph
     Tone.getTransport().stop();
     Tone.getTransport().cancel();
 
-    const { nodes, disposables, bpm: generatedBpm } = setupAudio(toneObjects, preset);
+    const { nodes, disposables, bpm: generatedBpm } = setupAudio(toneObjects);
     setBpm(generatedBpm);
     setIsPlaying(false);
 
-    // Preserve codeExec + melodyEnvVal written by setupAudio, then merge shared state.
+    // Preserve internals written by setupAudio before reassigning .current
+    const activeLead   = toneObjects.current.activeLead;
     const codeExec     = toneObjects.current.codeExec;
     const melodyEnvVal = toneObjects.current.melodyEnvVal;
+
     toneObjects.current = {
-      kickEnvelope: nodes.kickEnvelope, kickEnabled: true,
-      bassEnvelope: nodes.bassEnvelope, bassEnabled: true,
-      snare: nodes.snare,  snareEnabled: true,
-      tom:   nodes.tom,    tomEnabled:   true,
-      melody: nodes.melody, melodyEnabled: true,
+      kickEnvelope: nodes.kickEnvelope, kickEnabled:  true,
+      bassEnvelope: nodes.bassEnvelope, bassEnabled:  true,
+      snare: nodes.snare,  snareEnabled:  true,
+      tom:   nodes.tom,    tomEnabled:    true,
+      melodyEnabled: true,
       rhodes: nodes.rhodes, rhodesEnabled: true,
-      pad:   nodes.pad,    padEnabled:   true,
+      pad:   nodes.pad,    padEnabled:    true,
       fft:   nodes.fft,
       hihatEnabled: true,
       hihatTick: 0,
+      // Both lead synths stored so handlePresetSelect can reference them
+      melody1: nodes.melody1,
+      melody2: nodes.melody2,
+      activeLead,
       melodyEnvVal,
       codeExec,
     };
 
-    guiRef.current = setupGUI(nodes, toneObjects, generatedBpm, preset);
+    guiRef.current = setupGUI(nodes, toneObjects, generatedBpm);
 
     if (canvasRef.current) {
       p5Instance.current = new p5(createSketch(toneObjects), canvasRef.current);
@@ -60,7 +67,7 @@ function App() {
       Tone.getTransport().cancel();
       disposables.forEach((n) => n.dispose());
     };
-  }, [preset]);
+  }, []); // intentionally empty — audio graph is permanent for the session
 
   const togglePlay = async () => {
     if (!isPlaying) {
@@ -75,6 +82,12 @@ function App() {
 
   const handlePresetSelect = (id: number) => {
     if (id === preset) return;
+    // Seamless switch: just point activeLead at the other synth.
+    // The running melody Part will use the new synth on its very next note.
+    const activeLead = toneObjects.current.activeLead as { synth: unknown };
+    activeLead.synth = id === 1
+      ? toneObjects.current.melody1
+      : toneObjects.current.melody2;
     setPreset(id);
   };
 
@@ -82,12 +95,10 @@ function App() {
     <div className="relative min-h-screen w-full overflow-hidden" style={{ backgroundColor: "#000" }}>
       <div ref={canvasRef} className="absolute inset-0 z-0" />
 
-      {/* Live code panel */}
       <CodePanel toneObjectsRef={toneObjects} bpm={bpm} preset={preset} />
 
-      {/* Controls column — offset right of CodePanel (390px) */}
+      {/* Controls column */}
       <div style={{ position: "absolute", top: "32px", left: "390px", zIndex: 10 }} className="flex flex-col gap-4">
-        {/* Play / Stop button */}
         <button
           onClick={togglePlay}
           style={{
@@ -110,7 +121,6 @@ function App() {
           {isPlaying ? "[ STOP ]" : "[ PLAY ]"}
         </button>
 
-        {/* Status indicator */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", paddingLeft: "4px" }}>
           <div
             style={{
@@ -125,11 +135,9 @@ function App() {
           </span>
         </div>
 
-        {/* Preset selector */}
         <PresetSelector current={preset} onSelect={handlePresetSelect} />
       </div>
 
-      {/* Watermark */}
       <div style={{ position: "absolute", bottom: "20px", right: "24px", zIndex: 10, textAlign: "right", opacity: 0.15, fontFamily: "'Orbitron', monospace", color: "#ffffff", pointerEvents: "none" }}>
         <div style={{ fontSize: "12px", fontWeight: 700, letterSpacing: "0.2em" }}>Visual Music</div>
         <div style={{ fontSize: "9px", letterSpacing: "0.3em", marginTop: "2px" }}>BPM {bpm}</div>

@@ -20,31 +20,28 @@ export interface AudioNodes {
   rhodesFilter: Tone.Filter;
   pad: Tone.PolySynth;
   padFilter: Tone.Filter;
+  melody1: Tone.Synth;
+  melody1Filter: Tone.Filter;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  melody: any;          // Tone.Synth (preset 1) | Tone.PolySynth (preset 2)
-  melodyFilter: Tone.Filter;
+  melody2: any;   // Tone.PolySynth — kept as any for cross-version compatibility
+  melody2Filter: Tone.Filter;
   fft: Tone.FFT;
 }
 
-// ── Fixed bass line: root–fifth walking pattern ───────────────────────────────
+// ── Fixed bass line ────────────────────────────────────────────────────────────
 const BASS_EVENTS: [string, string][] = [
-  // Bar 0: Cm7
   ["0:0:0", "C2"], ["0:0:2", "G2"], ["0:1:0", "Bb2"],
   ["0:2:0", "C2"], ["0:2:2", "G2"], ["0:3:0", "Eb2"],
-  // Bar 1: Gm7
   ["1:0:0", "G1"], ["1:0:2", "D2"], ["1:1:0", "F2"],
   ["1:2:0", "G1"], ["1:2:2", "Bb1"],["1:3:0", "D2"],
-  // Bar 2: Abmaj7
   ["2:0:0", "Ab1"],["2:0:2", "Eb2"],["2:1:0", "G2"],
   ["2:2:0", "Ab1"],["2:2:2", "C2"], ["2:3:0", "Eb2"],
-  // Bar 3: Fm7
   ["3:0:0", "F2"], ["3:0:2", "C2"], ["3:1:0", "Eb2"],
   ["3:2:0", "F2"], ["3:2:2", "Ab1"],["3:3:0", "C2"],
 ];
 
 export function setupAudio(
   toneObjectsRef: { current: Record<string, unknown> },
-  preset = 1,
 ): {
   nodes: AudioNodes;
   disposables: Array<{ dispose(): void }>;
@@ -62,10 +59,15 @@ export function setupAudio(
     pad:    { t: 0, chord: "" },
     melody: { t: 0, note: "" },
   };
-  toneObjectsRef.current.codeExec = codeExec;
-  // Envelope value for visualization — updated by the melody Part callback,
-  // decayed per-frame in sketch.ts. Works for both Synth and PolySynth.
+  toneObjectsRef.current.codeExec     = codeExec;
   toneObjectsRef.current.melodyEnvVal = 0;
+
+  // ── Active lead reference — swapped at runtime for seamless switching ─────────
+  // The melody Part closes over this object. Changing `.synth` immediately affects
+  // the next scheduled note without touching the transport or any other voice.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeLead: { synth: any } = { synth: null }; // filled after synths are created
+  toneObjectsRef.current.activeLead = activeLead;
 
   // ── Global FX ────────────────────────────────────────────────────────────────
   const reverb  = new Tone.Reverb({ decay: 4.5, wet: 0.38 }).toDestination();
@@ -103,7 +105,7 @@ export function setupAudio(
   ).start(0);
   snarePart.loop = true; snarePart.loopEnd = "4:0";
 
-  // ── Hi-Hat (8th-note grid) ────────────────────────────────────────────────────
+  // ── Hi-Hat ────────────────────────────────────────────────────────────────────
   const openHiHat = new Tone.NoiseSynth({
     volume: -16, envelope: { attack: 0.005, decay: 0.09 },
   }).connect(lowPass);
@@ -148,7 +150,7 @@ export function setupAudio(
   ).start(0);
   bassPart.loop = true; bassPart.loopEnd = "4:0";
 
-  // ── Rhodes (sparse chord stabs) ───────────────────────────────────────────────
+  // ── Rhodes ────────────────────────────────────────────────────────────────────
   const rhodesChorus = new Tone.Chorus(3.5, 3, 0.45).start();
   const rhodesReverb = new Tone.Reverb({ decay: 2.5, wet: 0.3 }).toDestination();
   const rhodesFilter = new Tone.Filter({ frequency: 3000, type: "lowpass" });
@@ -173,7 +175,7 @@ export function setupAudio(
   ]).start(0);
   rhodesPart.loop = true; rhodesPart.loopEnd = "4:0";
 
-  // ── Pad (atmospheric wash) ────────────────────────────────────────────────────
+  // ── Pad ───────────────────────────────────────────────────────────────────────
   const padReverb = new Tone.Reverb({ decay: 8, wet: 0.7 }).toDestination();
   const padFilter = new Tone.Filter({ frequency: 1600, type: "lowpass", Q: 0.7 });
   const pad = new Tone.PolySynth(Tone.Synth, {
@@ -197,48 +199,42 @@ export function setupAudio(
   ]).start(0);
   padPart.loop = true; padPart.loopEnd = "4:0";
 
-  // ── Lead Synth — preset-dependent ────────────────────────────────────────────
+  // ── Lead Synth — both presets always loaded ────────────────────────────────────
   //
-  //  Preset 1: Tone.Synth with fatsawtooth×5 (thick, wide, retro-futurist)
-  //  Preset 2: Tone.PolySynth with fatsawtooth×3, tight punchy envelope (bright, cutting)
+  //  Preset 1: Tone.Synth with fatsawtooth×5 (thick, warm, wide)
+  //  Preset 2: Tone.PolySynth with fatsawtooth×3 (punchy, bright, tight envelope)
   //
-  //  Both share the same 16-bar fixed melody in C minor.
-  //  melodyEnvVal in toneObjectsRef is set to 1.0 on each trigger and
-  //  decayed per-frame in sketch.ts — independent of synth type.
+  //  Only ONE is triggered per note — whichever activeLead.synth points to.
+  //  Switching is instant: just reassign activeLead.synth from App.tsx.
+  //  The transport and all other voices continue uninterrupted.
   //
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let melody: any;
-  let melodyFilter: Tone.Filter;
+  const melody1Filter = new Tone.Filter({ frequency: 3200, type: "lowpass", Q: 1.8 }).connect(reverb);
+  const melody1 = new Tone.Synth({
+    volume: -2,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    oscillator: { type: "fatsawtooth", count: 5, spread: 35 } as any,
+    envelope: { attack: 0.04, decay: 0.55, sustain: 0.55, release: 2.2 },
+  }).connect(melody1Filter);
 
-  if (preset === 1) {
-    melodyFilter = new Tone.Filter({ frequency: 3200, type: "lowpass", Q: 1.8 }).connect(reverb);
-    melody = new Tone.Synth({
-      volume: -2,
+  const melody2Filter = new Tone.Filter({ frequency: 4500, type: "lowpass", Q: 1.2 }).connect(reverb);
+  const melody2 = new Tone.PolySynth(Tone.Synth, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    oscillator: { type: "fatsawtooth", count: 3, spread: 30 } as any,
+    envelope: {
+      attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.4,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      oscillator: { type: "fatsawtooth", count: 5, spread: 35 } as any,
-      envelope: { attack: 0.04, decay: 0.55, sustain: 0.55, release: 2.2 },
-    }).connect(melodyFilter);
-  } else {
-    // Preset 2: PolySynth — fast attack, punchy, brighter filter
-    melodyFilter = new Tone.Filter({ frequency: 4500, type: "lowpass", Q: 1.2 }).connect(reverb);
-    melody = new Tone.PolySynth(Tone.Synth, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      oscillator: { type: "fatsawtooth", count: 3, spread: 30 } as any,
-      envelope: {
-        attack: 0.01,
-        decay: 0.1,
-        sustain: 0.5,
-        release: 0.4,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        attackCurve: "exponential" as any,
-      },
-    }).connect(melodyFilter);
-    melody.volume.value = -3;
-  }
+      attackCurve: "exponential" as any,
+    },
+  }).connect(melody2Filter);
+  melody2.volume.value = -3;
+
+  // Default: start with preset 1
+  activeLead.synth = melody1;
 
   const melodyPart = new Tone.Part(
     (time: string, note: string) => {
-      melody.triggerAttackRelease(note, "8n", time);
+      // Always use whichever synth activeLead points to — no transport stop needed to switch
+      activeLead.synth.triggerAttackRelease(note, "8n", time);
       if (toneObjectsRef.current.melodyEnabled !== false) {
         toneObjectsRef.current.melodyEnvVal = 1.0;
         codeExec.melody = { t: Date.now(), note };
@@ -265,7 +261,8 @@ export function setupAudio(
     bass, bassFilter, bassEnvelope,
     rhodes, rhodesChorus, rhodesFilter,
     pad, padFilter,
-    melody, melodyFilter,
+    melody1, melody1Filter,
+    melody2, melody2Filter,
     fft,
   };
 
@@ -278,7 +275,9 @@ export function setupAudio(
     bass, bassFilter, bassEnvelope, bassPart,
     rhodes, rhodesChorus, rhodesFilter, rhodesReverb, rhodesPart,
     pad, padFilter, padReverb, padPart,
-    melody, melodyFilter, melodyPart,
+    melody1, melody1Filter,
+    melody2, melody2Filter,
+    melodyPart,
     fft,
   ];
 
