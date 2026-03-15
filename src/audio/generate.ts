@@ -1,75 +1,15 @@
 /**
- * Algorithmic music generation — unique output on every page load.
+ * Fixed retro-futurist composition — identical output on every page load.
  *
- * Techniques used:
- *   Value Noise + fBm  — smooth, organic variation for melody pitch/rhythm
- *   Bjorklund / Euclidean algorithm — maximally-even drum rhythms
+ * Musical style: Retro-Futurism / Synthwave / City Pop
+ * Key: C natural minor  —  i–v–VI–iv  (Cm7 | Gm7 | Abmaj7 | Fm7)
+ * BPM: 112
  *
- * The random permutation table (PERM) is the "seed":
- * it is shuffled once at module-load time, so every page visit
- * produces a different but internally-consistent result.
+ * All patterns and melodies are hand-crafted and deterministic.
+ * No random algorithms — every session sounds the same.
  */
 
-// ── Value Noise + fBm ─────────────────────────────────────────────────────────
-// Shuffle once per page load — this is the global random seed.
-const PERM = Array.from({ length: 256 }, (_, i) => i);
-for (let i = 255; i > 0; i--) {
-  const j = Math.floor(Math.random() * (i + 1));
-  [PERM[i], PERM[j]] = [PERM[j], PERM[i]];
-}
-
-const smoothstep = (t: number) => t * t * (3 - 2 * t);
-
-function vnoise(x: number): number {
-  const i = Math.floor(x) & 255;
-  const f = x - Math.floor(x);
-  const a = PERM[i] / 255;
-  const b = PERM[(i + 1) & 255] / 255;
-  return a + (b - a) * smoothstep(f);
-}
-
-/**
- * Fractional Brownian Motion — sums value noise at increasing frequencies.
- * Produces smooth, correlated random values in [0, 1].
- * Same x → same result within a session; different PERM → different result each load.
- */
-export function fbm(x: number, octaves = 4): number {
-  let v = 0, amp = 0.5, freq = 1, norm = 0;
-  for (let o = 0; o < octaves; o++) {
-    v += vnoise(x * freq) * amp;
-    norm += amp; amp *= 0.5; freq *= 2;
-  }
-  return v / norm;
-}
-
-// ── Euclidean Rhythm (Bjorklund Algorithm) ───────────────────────────────────
-// Recursively interleaves groups of 1s and 0s until maximally even.
-// E(3,8) = [1,0,0,1,0,0,1,0]  (tresillo)
-// E(5,16)= [1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0]  (clave-like kick)
-// E(4,16)= [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]  (four-on-the-floor)
-function bjorklund(g: boolean[][], hits: number, rem: number): boolean[] {
-  if (rem <= 1) return g.flat();
-  const n = Math.min(hits, rem);
-  const next: boolean[][] = [];
-  for (let i = 0; i < n; i++) next.push([...g[i], ...g[g.length - 1 - i]]);
-  next.push(...g.slice(n, g.length - n));
-  return bjorklund(next, n, Math.abs(hits - rem));
-}
-
-/**
- * Generate a Euclidean/Bjorklund rhythm pattern.
- * @param hits   Number of onsets
- * @param steps  Total steps (grid resolution)
- * @param offset Rotation in steps (shifts the pattern forward)
- * @returns      Boolean array of length `steps`
- */
-export function euclidean(hits: number, steps: number, offset = 0): boolean[] {
-  if (hits <= 0) return new Array(steps).fill(false);
-  if (hits >= steps) return new Array(steps).fill(true);
-  const g: boolean[][] = Array.from({ length: steps }, (_, i) => [i < hits]);
-  const raw = bjorklund(g, hits, steps - hits);
-  return [...raw.slice(offset), ...raw.slice(0, offset)];
-}
+// ── Pattern helpers ────────────────────────────────────────────────────────────
 
 /** Convert a 16-step boolean pattern → Tone.js time strings, replicated over `bars` bars. */
 function patternToBars(pattern: boolean[], bars: number): string[] {
@@ -82,132 +22,92 @@ function patternToBars(pattern: boolean[], bars: number): string[] {
   return times;
 }
 
-// ── Rhythm Generators ─────────────────────────────────────────────────────────
+// ── Fixed drum patterns ────────────────────────────────────────────────────────
 
 /**
- * Kick drum: Euclidean pattern on 16th-note grid.
- * hits 4–7 × offset 0–3 gives 16 distinct groove feels per session.
- *   E(4,16) = four-on-the-floor      E(5,16) = Afro-Cuban clave
- *   E(6,16) = busier groove          E(7,16) = very syncopated
+ * Kick drum: four-on-the-floor (beats 1–2–3–4).
+ * Steady, driving foundation for the retro-futurist groove.
  */
 export function generateKickTimes(): string[] {
-  const hits   = 4 + Math.floor(Math.random() * 4); // 4–7
-  const offset = Math.floor(Math.random() * 4);      // 0–3
-  return patternToBars(euclidean(hits, 16, offset), 4);
+  const pattern = [
+    true, false, false, false,
+    true, false, false, false,
+    true, false, false, false,
+    true, false, false, false,
+  ];
+  return patternToBars(pattern, 4);
 }
 
 /**
- * Open hi-hat: sparser Euclidean pattern, offset to land on off-beats.
- * hits 2–4 creates anywhere from a half-time feel to a quarter-note pulse.
+ * Hi-hat: 8th-note grid (on + off every beat).
+ * Smooth, driving pulse — no randomness, no variable density.
  */
 export function generateHihatTimes(): string[] {
-  const hits   = 2 + Math.floor(Math.random() * 3); // 2–4
-  const offset = 1 + Math.floor(Math.random() * 3); // 1–3 (avoid beat 1)
-  return patternToBars(euclidean(hits, 16, offset), 4);
+  const pattern = [
+    true, false, true, false,
+    true, false, true, false,
+    true, false, true, false,
+    true, false, true, false,
+  ];
+  return patternToBars(pattern, 4);
 }
 
-// ── Melody Generation (fBm-guided scale walk) ─────────────────────────────────
+// ── Fixed 16-bar lead melody ───────────────────────────────────────────────────
+//
+// C natural minor scale: C4 D4 Eb4 F4 G4 Ab4 Bb4 C5 D5 Eb5 F5 G5
+// Chord tones: Cm7(C,Eb,G,Bb) | Gm7(G,Bb,D,F) | Abmaj7(Ab,C,Eb,G) | Fm7(F,Ab,C,Eb)
+//
+// Four-section 16-bar form:
+//   A (bars  0–3):  Intro — spacious, establishing the motif
+//   B (bars  4–7):  Groove — syncopated, ascending energy
+//   C (bars  8–11): Climax — high register, emotional peak
+//   D (bars 12–15): Resolution — descending, peaceful close
 
-// C natural minor over two octaves: C4 → G5 (12 available scale degrees)
-const SCALE: readonly [string, number][] = [
-  ["C", 4], ["D", 4], ["Eb", 4], ["F", 4], ["G", 4], ["Ab", 4], ["Bb", 4],
-  ["C", 5], ["D", 5], ["Eb", 5], ["F", 5], ["G", 5],
-];
-
-// Chord-tone scale indices per chord (Cm7 | Gm7 | Abmaj7 | Fm7)
-// Notes outside these indices are used as passing tones between chord tones.
-const CHORD_TONES: readonly (readonly number[])[] = [
-  [0, 2, 4, 6, 7],   // Cm7:    C4 Eb4 G4 Bb4 C5
-  [1, 4, 6, 8, 10],  // Gm7:    D4 G4  Bb4 D5  F5
-  [2, 5, 7, 9, 11],  // Abmaj7: Eb4 Ab4 C5  Eb5 G5
-  [0, 3, 5, 7, 9],   // Fm7:    C4  F4  Ab4 C5  Eb5
-];
-
-// Per-section profile: register center, max step-delta, note count range
-// fBm noise seed offsets are spaced apart to avoid correlation between sections.
-const SECTIONS = [
-  { center: 4, maxDelta: 2, minNotes: 2, maxNotes: 3, seed: 0.0   }, // A mid,  spacious intro
-  { center: 6, maxDelta: 3, minNotes: 3, maxNotes: 4, seed: 50.0  }, // B high, syncopated groove
-  { center: 9, maxDelta: 2, minNotes: 3, maxNotes: 4, seed: 100.0 }, // C peak, emotional climax
-  { center: 3, maxDelta: 2, minNotes: 2, maxNotes: 3, seed: 150.0 }, // D low,  descending resolution
-] as const;
-
-// 8th-note rhythmic grid: [beat, subdivision] pairs within a bar
-// All melody notes land on these slots (subdivision 0 or 2 = 8th-note grid)
-const RHYTHM_SLOTS: readonly [number, number][] = [
-  [0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2], [3, 0], [3, 2],
-];
-
-function snapToChordTone(idx: number, chordIdx: number): number {
-  const ct = CHORD_TONES[chordIdx];
-  return ct.reduce((best, t) => (Math.abs(t - idx) < Math.abs(best - idx) ? t : best));
-}
-
-/**
- * Generate a 16-bar City Pop lead melody using fBm noise.
- * Every page load produces a different melody due to the randomized PERM seed.
- *
- * Algorithm per note:
- *   Beat 1 of each bar → snap to nearest chord tone, nudge toward section register
- *   All other beats    → fBm-guided ±delta walk through the scale
- *
- * Result: [time, note][] pairs ready to drop into a Tone.js Part.
- */
 export function generateMelody(): [string, string][] {
-  const events: [string, string][] = [];
-  let idx = snapToChordTone(4, 0); // start near G4 on a Cm7 tone
+  return [
+    // ── Section A: Intro ─────────────────────────────────────────────────────
+    // Bar 0: Cm7
+    ["0:0:0", "G4"],  ["0:1:0", "Bb4"], ["0:2:2", "G4"],  ["0:3:0", "Eb4"],
+    // Bar 1: Gm7
+    ["1:0:0", "D4"],  ["1:1:2", "G4"],  ["1:2:0", "Bb4"], ["1:3:0", "D5"],
+    // Bar 2: Abmaj7
+    ["2:0:0", "Eb5"], ["2:1:0", "C5"],  ["2:2:0", "G4"],  ["2:3:2", "Eb4"],
+    // Bar 3: Fm7
+    ["3:0:0", "F4"],  ["3:1:2", "Ab4"], ["3:2:0", "C5"],  ["3:3:0", "G4"],
 
-  for (let section = 0; section < 4; section++) {
-    const { center, maxDelta, minNotes, maxNotes, seed } = SECTIONS[section];
+    // ── Section B: Groove ────────────────────────────────────────────────────
+    // Bar 4: Cm7
+    ["4:0:0", "G4"],  ["4:0:2", "Bb4"], ["4:1:2", "Eb5"], ["4:2:0", "C5"],  ["4:2:2", "G4"],  ["4:3:2", "Bb4"],
+    // Bar 5: Gm7
+    ["5:0:0", "G4"],  ["5:0:2", "Bb4"], ["5:1:2", "D5"],  ["5:2:2", "Bb4"], ["5:3:0", "G4"],
+    // Bar 6: Abmaj7
+    ["6:0:0", "Ab4"], ["6:0:2", "C5"],  ["6:1:2", "Eb5"], ["6:2:0", "G5"],  ["6:3:0", "Eb5"], ["6:3:2", "C5"],
+    // Bar 7: Fm7
+    ["7:0:0", "F4"],  ["7:0:2", "Ab4"], ["7:1:0", "C5"],  ["7:2:2", "Ab4"], ["7:3:0", "F4"],  ["7:3:2", "C5"],
 
-    for (let b = 0; b < 4; b++) {
-      const bar   = section * 4 + b;
-      const chord = b % 4;
-      const s0    = seed + b * 7.3; // unique fBm seed per bar
+    // ── Section C: Climax ────────────────────────────────────────────────────
+    // Bar 8: Cm7
+    ["8:0:0", "G5"],  ["8:0:2", "Eb5"], ["8:1:0", "C5"],  ["8:1:2", "Eb5"], ["8:2:0", "G5"],  ["8:3:0", "Bb4"],
+    // Bar 9: Gm7
+    ["9:0:0", "D5"],  ["9:0:2", "F5"],  ["9:1:0", "D5"],  ["9:2:0", "Bb4"], ["9:2:2", "D5"],  ["9:3:0", "F5"],
+    // Bar 10: Abmaj7
+    ["10:0:0", "G5"], ["10:0:2", "Eb5"],["10:1:2", "C5"], ["10:2:0", "Ab4"],["10:2:2", "C5"], ["10:3:2", "Eb5"],
+    // Bar 11: Fm7
+    ["11:0:0", "F5"], ["11:0:2", "C5"], ["11:1:0", "Ab4"],["11:1:2", "C5"], ["11:2:0", "Eb5"],["11:3:0", "C5"],
 
-      // How many notes this bar (fBm → smooth density variation)
-      const count = minNotes + Math.floor(fbm(s0 + 0.1) * (maxNotes - minNotes + 0.99));
-
-      // Pick rhythmic slots: beat 1 is always first, rest chosen by noise
-      const pool = RHYTHM_SLOTS.slice(1).map(s => s); // mutable copy (exclude beat-1)
-      const chosen: [number, number][] = [[0, 0]];
-      for (let n = 1; n < count; n++) {
-        const pick = Math.floor(fbm(s0 + n * 1.9 + 0.5) * pool.length);
-        chosen.push(pool.splice(pick, 1)[0]);
-      }
-      chosen.sort((a, z) => (a[0] * 4 + a[1]) - (z[0] * 4 + z[1]));
-
-      for (let n = 0; n < chosen.length; n++) {
-        const [beat, sub] = chosen[n];
-
-        if (n === 0) {
-          // Downbeat: anchor to chord tone, keep register near section center
-          idx = snapToChordTone(idx, chord);
-          if (Math.abs(idx - center) > 4) {
-            idx += idx < center ? 1 : -1;
-            idx = Math.max(0, Math.min(SCALE.length - 1, idx));
-            idx = snapToChordTone(idx, chord);
-          }
-        } else {
-          // Off-beat: fBm-guided walk, ±maxDelta scale steps
-          const noiseVal = fbm(s0 + n * 2.3 + 11.7);
-          const delta    = Math.round((noiseVal - 0.5) * maxDelta * 2);
-          idx = Math.max(0, Math.min(SCALE.length - 1, idx + delta));
-        }
-
-        const [note, oct] = SCALE[idx];
-        events.push([`${bar}:${beat}:${sub}`, `${note}${oct}`]);
-      }
-    }
-  }
-
-  return events;
+    // ── Section D: Resolution ────────────────────────────────────────────────
+    // Bar 12: Cm7
+    ["12:0:0","Eb5"], ["12:1:0","Bb4"], ["12:2:0","G4"],  ["12:3:0","Eb4"],
+    // Bar 13: Gm7
+    ["13:0:0","D5"],  ["13:1:0","Bb4"], ["13:2:0","G4"],  ["13:3:0","D4"],
+    // Bar 14: Abmaj7
+    ["14:0:0","C5"],  ["14:1:0","G4"],  ["14:2:0","Eb4"], ["14:3:2","C4"],
+    // Bar 15: Fm7
+    ["15:0:0","F4"],  ["15:1:0","C4"],  ["15:2:0","Eb4"], ["15:3:0","G4"],
+  ];
 }
 
-/**
- * BPM with slight per-session variation — City Pop comfort zone.
- * Range: 104–116 BPM (centered around 110).
- */
+/** Fixed BPM: 112 — synthwave / city pop sweet spot. */
 export function getRandomBpm(): number {
-  return Math.round(104 + Math.random() * 12);
+  return 112;
 }

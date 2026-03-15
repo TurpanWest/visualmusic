@@ -6,10 +6,12 @@ import { setupAudio } from "./audio/instruments";
 import { setupGUI } from "./audio/gui";
 import { createSketch } from "./sketch/sketch";
 import CodePanel from "./components/CodePanel";
+import PresetSelector from "./components/PresetSelector";
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [bpm, setBpm]            = useState(110);
+  const [bpm, setBpm]            = useState(112);
+  const [preset, setPreset]      = useState(1);
   const canvasRef    = useRef<HTMLDivElement>(null);
   const p5Instance   = useRef<p5 | null>(null);
   const guiRef       = useRef<GUI | null>(null);
@@ -19,12 +21,17 @@ function App() {
     if (p5Instance.current) p5Instance.current.remove();
     if (guiRef.current)     guiRef.current.destroy();
 
-    const { nodes, disposables, bpm: generatedBpm } = setupAudio(toneObjects);
-    setBpm(generatedBpm);
+    // Stop any in-flight transport before re-building the audio graph
+    Tone.getTransport().stop();
+    Tone.getTransport().cancel();
 
-    // Preserve codeExec written by setupAudio, then merge with the rest of shared state.
-    // Both GUI callbacks and the p5 sketch read from toneObjects.current.
-    const codeExec = toneObjects.current.codeExec;
+    const { nodes, disposables, bpm: generatedBpm } = setupAudio(toneObjects, preset);
+    setBpm(generatedBpm);
+    setIsPlaying(false);
+
+    // Preserve codeExec + melodyEnvVal written by setupAudio, then merge shared state.
+    const codeExec     = toneObjects.current.codeExec;
+    const melodyEnvVal = toneObjects.current.melodyEnvVal;
     toneObjects.current = {
       kickEnvelope: nodes.kickEnvelope, kickEnabled: true,
       bassEnvelope: nodes.bassEnvelope, bassEnabled: true,
@@ -32,14 +39,15 @@ function App() {
       tom:   nodes.tom,    tomEnabled:   true,
       melody: nodes.melody, melodyEnabled: true,
       rhodes: nodes.rhodes, rhodesEnabled: true,
-      arp:   nodes.arp,    arpEnabled:   true,
       pad:   nodes.pad,    padEnabled:   true,
       fft:   nodes.fft,
+      hihatEnabled: true,
       hihatTick: 0,
-      codeExec,  // preserved from setupAudio so CodePanel can read it
+      melodyEnvVal,
+      codeExec,
     };
 
-    guiRef.current = setupGUI(nodes, toneObjects, generatedBpm);
+    guiRef.current = setupGUI(nodes, toneObjects, generatedBpm, preset);
 
     if (canvasRef.current) {
       p5Instance.current = new p5(createSketch(toneObjects), canvasRef.current);
@@ -52,7 +60,7 @@ function App() {
       Tone.getTransport().cancel();
       disposables.forEach((n) => n.dispose());
     };
-  }, []);
+  }, [preset]);
 
   const togglePlay = async () => {
     if (!isPlaying) {
@@ -65,15 +73,21 @@ function App() {
     }
   };
 
+  const handlePresetSelect = (id: number) => {
+    if (id === preset) return;
+    setPreset(id);
+  };
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden" style={{ backgroundColor: "#000" }}>
       <div ref={canvasRef} className="absolute inset-0 z-0" />
 
-      {/* Live code panel — z-index 5, sits between canvas and UI controls */}
-      <CodePanel toneObjectsRef={toneObjects} bpm={bpm} />
+      {/* Live code panel */}
+      <CodePanel toneObjectsRef={toneObjects} bpm={bpm} preset={preset} />
 
-      {/* Cyberpunk play button — offset right of CodePanel (390px) */}
-      <div style={{ position: "absolute", top: "32px", left: "390px", zIndex: 10 }} className="flex flex-col gap-3">
+      {/* Controls column — offset right of CodePanel (390px) */}
+      <div style={{ position: "absolute", top: "32px", left: "390px", zIndex: 10 }} className="flex flex-col gap-4">
+        {/* Play / Stop button */}
         <button
           onClick={togglePlay}
           style={{
@@ -95,6 +109,8 @@ function App() {
         >
           {isPlaying ? "[ STOP ]" : "[ PLAY ]"}
         </button>
+
+        {/* Status indicator */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", paddingLeft: "4px" }}>
           <div
             style={{
@@ -108,6 +124,9 @@ function App() {
             {isPlaying ? "TRANSMITTING" : "STANDBY"}
           </span>
         </div>
+
+        {/* Preset selector */}
+        <PresetSelector current={preset} onSelect={handlePresetSelect} />
       </div>
 
       {/* Watermark */}

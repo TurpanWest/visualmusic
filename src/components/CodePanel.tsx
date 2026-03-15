@@ -18,10 +18,9 @@ const COLOR: Record<string, string> = {
   hihat:  "#44ffee",  // cyan       → particle spray
   tom:    "#00ddcc",  // teal       → hexagons
   bass:   "#ff4488",  // pink       → noise blob
-  rhodes: "#00ff88",  // green
-  arp:    "#ffaa00",  // amber
-  pad:    "#8888ff",  // lavender
-  melody: "#cc44ff",  // purple     → orbit ring
+  rhodes: "#00ff88",  // green      → sparse comping
+  pad:    "#8888ff",  // lavender   → atmosphere
+  melody: "#00ffcc",  // teal       → lead synth orbit ring
 };
 
 const FADE_MS   = 650;   // highlight decay time
@@ -50,7 +49,7 @@ const BLOCKS: {
     lines: [
       "kickEnvelope.triggerAttack(time)",
       "kickSnapEnv.triggerAttack(time)  // C1+4oct punch",
-      "// pattern: E(?,16,?) euclidean 16th grid",
+      "// pattern: four-on-the-floor (beats 1–2–3–4)",
     ],
   },
   {
@@ -65,8 +64,8 @@ const BLOCKS: {
     id: "hihat", color: COLOR.hihat,
     header: "// ── Hi-Hat ───────────────────────────────────────",
     lines: [
-      "openHiHat.triggerAttack(time)   // E(?,16,?)",
-      "closedHiHat.triggerAttack(time) // 16n velocity-rand",
+      "openHiHat.triggerAttack(time)",
+      "// 8th-note grid — steady driving pulse",
     ],
   },
   {
@@ -82,42 +81,38 @@ const BLOCKS: {
     header: "// ── Bass  (Cm7 | Gm7 | Abmaj7 | Fm7) ────────────",
     lines: [
       "bass.frequency.setValueAtTime(note, time)",
-      "bassEnvelope.triggerAttack(time)  // decay: 0.66s",
+      "bassEnvelope.triggerAttack(time)",
+      "// root–fifth walking line, 6 hits/bar",
     ],
     dynamic: true,
   },
   {
     id: "rhodes", color: COLOR.rhodes,
-    header: "// ── Rhodes (triangle + chorus + reverb) ──────────",
+    header: "// ── Rhodes (sparse comping — 1 stab/bar) ─────────",
     lines: [
       `rhodes.triggerAttackRelease(chord, "4n", time)`,
-    ],
-    dynamic: true,
-  },
-  {
-    id: "arp", color: COLOR.arp,
-    header: "// ── Arp (sawtooth + bandpass + feedback delay) ───",
-    lines: [
-      `arp.triggerAttackRelease(note, "16n", time)`,
+      "// off-beat stab at beat 1-and each bar",
     ],
     dynamic: true,
   },
   {
     id: "pad", color: COLOR.pad,
-    header: "// ── Pad (fatsawtooth×3 + reverb decay:7s) ────────",
+    header: "// ── Pad (fatsawtooth×2 + reverb decay:8s) ────────",
     lines: [
       `pad.triggerAttackRelease(chord, "1n", time)`,
+      "// atmospheric wash, very low volume",
     ],
     dynamic: true,
   },
   {
     id: "melody", color: COLOR.melody,
-    header: "// ── Melody — fBm walk, C natural minor ───────────",
+    // header is overridden in render based on preset
+    header: "// ── Lead Synth (main) ────────────────────────────",
     lines: [
-      "// A(0-3): center=G4,  Δ=±2, density=2–3 notes",
-      "// B(4-7): center=Bb4, Δ=±3, density=3–4 notes",
-      "// C(8-11):center=Eb5, Δ=±2, density=3–4 notes",
-      "// D(12-15):center=F4, Δ=±2, density=2–3 notes",
+      "// A(0-3):  intro — spacious, establishing motif",
+      "// B(4-7):  groove — syncopated, ascending",
+      "// C(8-11): climax — high register, emotional peak",
+      "// D(12-15):resolution — descending, peaceful close",
       `melody.triggerAttackRelease(note, "8n", time)`,
     ],
     dynamic: true,
@@ -131,9 +126,10 @@ type CodeExec  = Record<string, ExecEntry>;
 interface Props {
   toneObjectsRef: React.MutableRefObject<Record<string, unknown>>;
   bpm: number;
+  preset: number;
 }
 
-export default function CodePanel({ toneObjectsRef, bpm }: Props) {
+export default function CodePanel({ toneObjectsRef, bpm, preset }: Props) {
   // Refs to each instrument block DOM element
   const blockEls   = useRef<Record<string, HTMLDivElement | null>>({});
   // Refs to each dynamic annotation span
@@ -250,29 +246,26 @@ export default function CodePanel({ toneObjectsRef, bpm }: Props) {
           </span>
         </div>
         <div style={{ ...mono, color: "#2a3d4d", fontSize: "11px" }}>
-          {`bpm = ${bpm}  //  i–v–VI–iv in C minor`}
+          {`bpm = ${bpm}  //  preset ${preset} · C minor · fixed`}
         </div>
       </div>
 
-      {/* ── Algorithms (static) ──────────────────────────────────────────────── */}
+      {/* ── Arrangement (static) ─────────────────────────────────────────────── */}
       <Section>
         <Comment>{"// generate.ts ─────────────────────────────────────────"}</Comment>
         <Blank />
-        <Comment>{"// Value Noise — permutation table shuffled at load time"}</Comment>
-        <Code>{"const PERM = shuffle([0..255])  // ← session seed"}</Code>
+        <Comment>{"// Fixed retro-futurist arrangement — C natural minor"}</Comment>
+        <Comment>{"// Chord loop: Cm7 | Gm7 | Abmaj7 | Fm7  (i–v–VI–iv)"}</Comment>
         <Blank />
-        <Code>{"fbm(x, octaves = 4) {"}</Code>
-        <Code>{"  return Σ[i] vnoise(x · 2ⁱ) · 0.5ⁱ"}</Code>
-        <Code>{"}"}</Code>
+        <Comment>{"// Kick:  four-on-the-floor (beats 1–2–3–4)"}</Comment>
+        <Comment>{"// Hihat: 8th-note grid (on + off every beat)"}</Comment>
+        <Comment>{"// Bass:  fixed root–fifth walking line"}</Comment>
         <Blank />
-        <Comment>{"// Bjorklund — spread N hits evenly across M steps"}</Comment>
-        <Code>{"euclidean(hits, steps, offset) {"}</Code>
-        <Code>{"  bjorklund(groups, hits, rem)"}</Code>
-        <Code>{"  .rotate(offset)"}</Code>
-        <Code>{"}"}</Code>
-        <Blank />
-        <Comment>{"// E(4,16) → four-on-the-floor"}</Comment>
-        <Comment>{"// E(5,16) → clave  E(7,16) → very syncopated"}</Comment>
+        <Comment>{"// Lead melody: 16-bar hand-crafted phrase"}</Comment>
+        <Code>{"//  A(0–3):   G4→Bb4  spacious intro"}</Code>
+        <Code>{"//  B(4–7):   G4→G5   syncopated groove"}</Code>
+        <Code>{"//  C(8–11):  G5→F5   high-register climax"}</Code>
+        <Code>{"//  D(12–15): Eb5→G4  descending resolution"}</Code>
       </Section>
 
       {/* ── Instrument blocks ──────────────────────────────────────────────── */}
@@ -289,7 +282,13 @@ export default function CodePanel({ toneObjectsRef, bpm }: Props) {
               backgroundColor: "transparent",
             }}
           >
-            <div style={{ ...mono, color: "#2a4050", marginBottom: "3px" }}>{header}</div>
+            <div style={{ ...mono, color: "#2a4050", marginBottom: "3px" }}>
+              {id === "melody"
+                ? (preset === 1
+                    ? "// ── Lead Synth — FatSaw×5 (Preset 1) ────────────"
+                    : "// ── Lead Synth — PolySynth (Preset 2) ───────────")
+                : header}
+            </div>
             {lines.map((line, i) => (
               <div key={i} style={{ ...mono, color: "#7a9bac" }}>{line}</div>
             ))}
