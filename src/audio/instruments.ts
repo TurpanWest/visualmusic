@@ -232,7 +232,7 @@ export function setupAudio(
   activeLead.synth = melody1;
 
   const melodyPart = new Tone.Part(
-    (time: string, note: string) => {
+    (time: number, note: string) => {
       // Always use whichever synth activeLead points to — no transport stop needed to switch
       activeLead.synth.triggerAttackRelease(note, "8n", time);
       if (toneObjectsRef.current.melodyEnabled !== false) {
